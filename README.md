@@ -1,4 +1,4 @@
-# Active Lesion Localization with DQN and PPO
+# Active Lesion Localization with DQN and PPO in LITS 
 
 Public repository link: https://github.com/Dannyism11/Lession_Detection_in_RL
 
