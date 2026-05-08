@@ -1,105 +1,168 @@
-# Active Lesion Localization with DQN and PPO in LITS 
+# Active Lesion Localization with DQN and PPO
 
-Public repository link: https://github.com/Dannyism11/Lession_Detection_in_RL
+This repository implements a deep reinforcement learning pipeline for 2D active lesion localization in CT slices from the LiTS liver tumor segmentation dataset. The project compares a Caicedo-style DQN baseline with two PPO-based improvements that stabilize localization behavior and improve reported bounding-box quality.
 
-This repository contains the final notebooks for a deep reinforcement learning project on 2D active lesion localization in CT slices. The project follows a three-stage experimental flow:
+![Improvement 2 Architecture](Architecture-diagrams/Improvement-2-architecture.png)
 
-1. **Baseline**: DQN-style active localization.
-2. **Improvement 1**: Stabilized PPO localizer.
-3. **Improvement 2**: PPO with multi-start confidence reporting.
+## Table of Contents
 
+- [Project Overview](#project-overview)
+- [Project Team](#project-team)
+- [Repository Structure](#repository-structure)
+- [Getting Started](#getting-started)
+- [Key Innovations](#key-innovations)
+  - [DQN-Style Active Localization Baseline](#dqn-style-active-localization-baseline)
+  - [Stabilized PPO Localizer](#stabilized-ppo-localizer)
+  - [Multi-start Confidence Reporting](#multi-start-confidence-reporting)
+- [Experimental Results](#experimental-results)
+- [Citations](#citations)
 
-## Group Information
+## Project Overview
+
+Active lesion localization treats object localization as a sequential decision problem. An agent starts with an image-level bounding box and repeatedly applies discrete transformations until it triggers a final localization decision. In these notebooks, LiTS 3D tumor annotations are converted into axial 2D lesion records, and the agent learns to localize lesion boxes using CT crops, action history, and normalized box geometry.
+
+The project follows three notebook stages:
+
+1. **Baseline**: DQN-style active localization with replay memory and a frozen VGG16 fc6 visual encoder.
+2. **Improvement 1**: Stabilized PPO localizer with behavior cloning warmup, action masking, curriculum learning, clipped value loss, and trigger auxiliary loss.
+3. **Improvement 2**: PPO with multi-start confidence reporting, where the trained policy is evaluated from 7 deterministic start boxes and a learned stop-confidence score selects the reported box.
+
+Core notebook settings:
+
+- Dataset path: `/kaggle/input/datasets/javariatahir123/lits17-liver-tumor-segmentation`
+- Expected dataset folders: `CT_Vol/CT_Vol` and `CT_Mask/CT_Mask`
+- CT windowing: HU range `[-200, 300]`
+- Image crop size: `224 x 224`
+- Action space: 9 actions, including 8 box transformations and 1 trigger action
+- Maximum episode length: 40 steps
+- Random seed: 42
+- Metadata split: 89 train volumes, 14 validation volumes, and 15 test volumes
+- 2D records: PPO notebooks report 624 train, 132 validation, and 128 test records; the baseline notebook reports 623 train, 132 validation, and 128 test records
+
+## Project Team
 
 | Field | Value |
 |---|---|
 | Name 1 | Muhammad Hamdan Sikandar |
-| Roll 1 | 27100326 |
-| Name 2 | Hadi Shahzad Khan |
-| Roll 2 | 27100475 |
+| Rollnumber 1 | 27100326 |
+| Name 2 | Hadi Shazad Khan |
+| Rollnumber 2 | 27100475 |
 
-## Repository Contents
+## Repository Structure
 
-| File | Role |
-|---|---|
-| `Baseline-Final.ipynb` | Final baseline notebook using DQN-style active localization. |
-| `Improvement_1.ipynb` | Improvement 1 notebook using a stabilized PPO training setup. |
-| `Improvement_2.ipynb` | Improvement 2 notebook using multi-start confidence reporting on top of PPO. |
+```text
+Lession_Detection_in_RL/
+|-- README.md
+|-- Baseline-Final.ipynb                         # DQN-style active localization baseline
+|-- Improvement_1.ipynb                          # Stabilized PPO localizer
+|-- Improvement_2.ipynb                          # PPO with multi-start confidence reporting
+`-- Architecture-diagrams/
+    |-- baseline-architecture.png                # Baseline architecture visualization
+    |-- Improvement-1-architecture.png           # PPO improvement architecture
+    `-- Improvement-2-architecture.png           # Multi-start reporting architecture
+```
 
-Generated checkpoints, metrics, and figures are written inside `/kaggle/working/...` during execution and are not required to be committed to GitHub.
+## Getting Started
 
-## Dataset
+### Prerequisites
 
-The notebooks expect the LiTS dataset in the following Kaggle path:
+- Python 3.8+
+- PyTorch
+- torchvision
+- numpy
+- scipy
+- nibabel
+- matplotlib
+- pandas
+- Jupyter or Kaggle Notebook
+
+The recommended runtime is a Kaggle Notebook with GPU enabled, because the notebooks expect the LiTS dataset at the Kaggle input path shown above.
+
+### Running the Code
+
+1. Clone the repository:
+
+```bash
+git clone https://github.com/Dannyism11/Lession_Detection_in_RL.git
+cd Lession_Detection_in_RL
+```
+
+2. Install local editing dependencies if you are not running on Kaggle:
+
+```bash
+python -m pip install torch torchvision numpy scipy nibabel matplotlib pandas jupyter
+```
+
+3. Attach the LiTS dataset in Kaggle at:
 
 ```text
 /kaggle/input/datasets/javariatahir123/lits17-liver-tumor-segmentation
 ```
 
-Expected subdirectories:
+4. Run the notebooks in order:
 
 ```text
-CT_Vol/CT_Vol
-CT_Mask/CT_Mask
+Baseline-Final.ipynb
+Improvement_1.ipynb
+Improvement_2.ipynb
 ```
 
+The notebooks generate checkpoints, metric tables, JSON summaries, training logs, and qualitative rollout visualizations under:
 
-## Method Summary
+```text
+/kaggle/working/caicedo_baseline_final
+/kaggle/working/improvement_1
+/kaggle/working/improvement_2
+```
 
-### Baseline
+## Key Innovations
 
-The baseline uses an active localization setup where an agent starts with a bounding box and applies discrete actions to move, resize, or trigger a final lesion localization decision. It provides the reference performance for the project.
+### DQN-Style Active Localization Baseline
 
-Main characteristics:
+The baseline implements a Caicedo-style active localization environment. The state combines VGG16 fc6 features, a 10-step action history, and normalized box geometry. The policy predicts Q-values for 9 localization actions.
 
-- DQN-style action-value policy.
-- 2D lesion records built from 3D LiTS annotations.
-- Maximum of 40 localization steps per case.
-- Training capped at 300 records.
-- Validation capped at 100 records.
+The baseline trains for 8 epochs using replay memory, target-network updates, guided exploration, reversal suppression, and no-op action masking.
 
-### Improvement 1: Stabilized PPO Localizer
+### Stabilized PPO Localizer
 
-The first improvement replaces the DQN-style policy with PPO and adds a more stable training protocol. The goal is to improve the search behavior and increase the best lesion overlap reached during the localization trajectory.
+Improvement 1 replaces the DQN value policy with a PPO actor-critic model. It keeps the frozen VGG16 feature extractor but adds a shared policy/value torso over visual features, action history, and box geometry.
 
-Main characteristics:
+The PPO notebooks use:
 
-- PPO actor-critic policy.
-- Frozen VGG16-based visual feature extractor.
-- Behavior cloning warmup.
-- Action masking to avoid invalid or immediately reversing moves.
-- Curriculum learning over lesion sizes.
-- Clipped value loss and trigger auxiliary loss.
-- Training capped at 300 records.
-- Validation capped at 100 records.
+- 80,000 total timesteps
+- 2,048 steps per rollout
+- 2 PPO epochs per update
+- minibatch size 64
+- policy learning rate `3e-5`
+- gamma `0.95`
+- GAE lambda `0.95`
+- clip coefficient `0.10`
+- clipped value loss with value clip `0.20`
+- entropy annealing from `0.001` to `0.00015`
+- behavior cloning warmup over 500 episodes for 5 epochs
+- action masking to avoid invalid actions and immediate reversals
+- trigger auxiliary loss for better stop-action learning
+- curriculum phases over lesion diameter: `A_large >= 20 mm`, `B_medium >= 10 mm`, and `C_all >= 0 mm`
 
-### Improvement 2: Multi-start Confidence Reporting
+The trigger reward is threshold-centered around IoU 0.50.
 
-The second improvement keeps the trained PPO policy but changes the reporting strategy. Instead of relying on a single start box, the same policy is evaluated from multiple deterministic valid start boxes. The final reported box is selected using learned stop-confidence information.
+### Multi-start Confidence Reporting
 
-Main characteristics:
+Improvement 2 keeps the PPO training setup and changes the reporting protocol. Instead of relying on one rollout from the full-image start box, the notebook evaluates 7 deterministic start boxes and chooses the reported frame with a learned stop-confidence score.
 
-- Uses the same PPO localization policy.
-- Runs evaluation from 7 deterministic start boxes.
-- Selects the reported box using stop-confidence scoring.
-- Does not use ground-truth labels at deployment time for selecting the final box.
-- Improves final reported IoU and best trajectory IoU over the baseline.
+Notebook reporting configuration:
 
-## Experimental Configuration
+- Report protocol: `multistart_stop_confidence_report`
+- Number of start boxes: 7
+- Timeout box selection: `stop_margin`
+- Report best on timeout: `True`
+- Report best on trigger: `False`
+- Minimum report step: 1
+- Maximum report box area fraction: 0.75
 
-| Setting | Baseline | Improvement 1 | Improvement 2 |
-|---|---:|---:|---:|
-| Max training records | 300 | 300 | 300 |
-| Max validation records | 100 | 100 | 100 |
-| Max steps per episode | 40 | 40 | 40 |
-| PPO timesteps | N/A | 80,000 | 80,000 |
-| Curriculum | No | Yes | Yes |
-| Multi-start reporting | No | No | Yes |
-| Number of start boxes | 1 | 1 | 7 |
+## Experimental Results
 
-## Final Reported Results
-
-The following values are taken from the executed final notebook cells.
+The following values are taken from the final evaluation cells in the executed notebooks.
 
 | Model | Split | n | Mean Final IoU | Mean Best IoU | Final@0.25 | Final@0.5 | Best@0.25 | Best@0.5 |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
@@ -110,49 +173,31 @@ The following values are taken from the executed final notebook cells.
 | Improvement 2 | Validation | 100 | 0.1578 | 0.5283 | 0.2300 | 0.0400 | 0.7800 | 0.6500 |
 | Improvement 2 | Test | 100 | 0.0816 | 0.2342 | 0.1200 | 0.0500 | 0.3500 | 0.1600 |
 
-Interpretation:
+Experimental configuration:
 
-- Improvement 1 mainly improves the best localization reached during the trajectory.
-- Improvement 2 improves both the final reported localization and the best reached localization.
+| Setting | Baseline | Improvement 1 | Improvement 2 |
+|---|---:|---:|---:|
+| Max training records | 300 | 300 | 300 |
+| Max validation records | 100 | 100 | 100 |
+| Test records evaluated | 128 | 100 | 100 |
+| Max steps per episode | 40 | 40 | 40 |
+| Training budget | 8 epochs | 80,000 timesteps | 80,000 timesteps |
+| Visual encoder | Frozen VGG16 fc6 | Frozen VGG16 features | Frozen VGG16 features |
+| Behavior cloning warmup | No | Yes | Yes |
+| Curriculum learning | No | Yes | Yes |
+| Action masking | Yes | Yes | Yes |
+| Multi-start reporting | No | No | Yes |
+| Number of start boxes | 1 | 1 | 7 |
 
-## How to Run
+Key observations:
 
-The recommended environment is Kaggle Notebook with GPU enabled.
+1. **Improvement 1** substantially increases validation best-trajectory localization, raising validation mean best IoU from `0.2026` to `0.4639`.
+2. **Improvement 2** gives the strongest final reported validation and test performance in the final tables, reaching test mean final IoU `0.0816` and test mean best IoU `0.2342`.
+3. **Multi-start confidence reporting** has mixed per-record diagnostics: the notebook reports mean multistart gain `-0.0265` on validation and `0.0245` on test, with improved-rate `0.25` on validation and `0.13` on test.
 
-1. Upload or open the repository notebooks in Kaggle.
-2. Attach the LiTS dataset at the expected path.
-3. Run the notebooks in this order:
+## Citations
 
-```text
-Baseline-Final.ipynb
-Improvement_1.ipynb
-Improvement_2.ipynb
-```
-
-4. Check the final metric tables and trajectory visualizations at the bottom of each notebook.
-
-For local editing only:
-
-```bash
-python -m pip install torch torchvision numpy scipy nibabel matplotlib pandas jupyter
-jupyter lab .
-```
-
-## Output Files
-
-The notebooks write outputs to:
-
-| Notebook | Output Directory |
-|---|---|
-| Baseline | `/kaggle/working/caicedo_baseline_final` |
-| Improvement 1 | `/kaggle/working/improvement_1` |
-| Improvement 2 | `/kaggle/working/improvement_2` |
-
-Typical generated files include:
-
-- Best model checkpoint files, such as `improvement_2_best.pt`.
-- Final metric CSV files.
-- Training log CSV files.
-- Qualitative rollout visualizations.
-- JSON metric summaries.
-
+- [Active Object Localization with Deep Reinforcement Learning - Caicedo and Lazebnik](https://arxiv.org/abs/1511.06015)
+- [Proximal Policy Optimization Algorithms - Schulman et al.](https://arxiv.org/abs/1707.06347)
+- [Very Deep Convolutional Networks for Large-Scale Image Recognition - Simonyan and Zisserman](https://arxiv.org/abs/1409.1556)
+- [The Liver Tumor Segmentation Benchmark (LiTS) - Bilic et al.](https://pubmed.ncbi.nlm.nih.gov/36481607/)
